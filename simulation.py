@@ -159,7 +159,8 @@ def run_simulation(simulation_time=24, num_servers=3, service_rate=10, queue_dis
         "waiting_times": queue_system.waiting_times,
         "service_times": queue_system.service_times,
         "system_times": queue_system.system_times,
-        "customer_data": queue_system.customer_data
+        "customer_data": queue_system.customer_data,
+        "num_servers": num_servers
     }
 
     return stats, customer_df, data, logs
@@ -169,3 +170,47 @@ output_dir_fifo = os.path.join("output", "fifo")
 output_dir_sjf = os.path.join("output", "sjf")
 os.makedirs(output_dir_fifo, exist_ok=True)
 os.makedirs(output_dir_sjf, exist_ok=True)
+
+# 30 runs with FIFO queue discipline
+for num_server in range(2,11):
+    all_stats = [] # Overall stats for each run
+    writer = pd.ExcelWriter(f"output\\fifo\\simulation_results_fifo_{num_server}server.xlsx", engine="xlsxwriter")
+
+    for run in range(30):
+        # Set random seed
+        random.seed()
+
+        # Run the simulation
+        stats, customer_data = run_simulation(simulation_time=24, num_servers=num_server, service_rate=1.2, queue_discipline="FIFO")
+
+        # Append overall statistics for this run
+        all_stats.append(stats)
+    
+        # Save customer data to a new sheet in the workbook
+        sheet_name = f"Run_{run+1}"
+        customer_data.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    # Save the workbook
+    writer.close()
+
+# 30 runs with SJF queue discipline
+for num_server in range(2,11):
+    all_stats = [] # Overall stats for each run
+    writer = pd.ExcelWriter(f"output\\sjf\\simulation_results_sjf_{num_server}server.xlsx", engine="xlsxwriter")
+
+    for run in range(30):
+        # Set random seed
+        random.seed()
+
+        # Run the simulation
+        stats, customer_data = run_simulation(simulation_time=24, num_servers=num_server, service_rate=1.2, queue_discipline="SJF")
+
+        # Append overall statistics for this run
+        all_stats.append(stats)
+    
+        # Save customer data to a new sheet in the workbook
+        sheet_name = f"Run_{run+1}"
+        customer_data.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    # Save the workbook
+    writer.close()

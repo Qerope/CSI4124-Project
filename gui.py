@@ -15,217 +15,279 @@ import base64
 import openpyxl
 from PIL import Image
 
-def create_queue_animation(queue_lengths, simulation_time):
+def create_queue_animation(all_queue_lengths, average_queue_length, num_servers, label):
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.set_xlim(0, len(queue_lengths))
-    ax.set_ylim(0, max(queue_lengths) + 5)
-    ax.set_title("Queue Length Per Customer")
+    max_length = max(max(len(run) for run in all_queue_lengths), len(average_queue_length))
+    max_height = max(max(max(run) for run in all_queue_lengths), max(average_queue_length)) + 5
+    
+    ax.set_xlim(0, max_length)
+    ax.set_ylim(0, max_height)
+    ax.set_title(f"Queue Length Per Customer {label} m={num_servers}")
     ax.set_xlabel("Customer")
     ax.set_ylabel("Queue Length")
-    line, = ax.plot([], [], lw=2, color="blue", label="Queue Length")
+    lines = [ax.plot([], [], lw=1, alpha=0.6)[0] for _ in all_queue_lengths]
+    avg_line, = ax.plot([], [], lw=2, color="red", label="Average")
     ax.legend()
 
     frames = []
 
-    for frame in range(len(queue_lengths)):
-        x = list(range(frame))
-        y = queue_lengths[:frame]
-        line.set_data(x, y)
-
+    for frame in range(max_length):
+        for line, queue_lengths in zip(lines, all_queue_lengths):
+            line.set_data(range(min(frame, len(queue_lengths))), queue_lengths[:frame])
+        avg_line.set_data(range(min(frame, len(average_queue_length))), average_queue_length[:frame])
+        
         buf = BytesIO()
-        plt.savefig(buf, format='png')  # Save the current plot to the buffer as PNG
+        plt.savefig(buf, format='png')  # Save current plot to buffer as PNG
         buf.seek(0)
-        frame_img = Image.open(buf) 
-        frames.append(frame_img)  
+        frame_img = Image.open(buf)
+        frames.append(frame_img)
 
     gif_buf = BytesIO()
     frames[0].save(gif_buf, save_all=True, append_images=frames[1:], duration=100, loop=0, format='GIF')
 
     gif_buf.seek(0)
 
+    filename = f"animated_queue_lengths_{label} m={num_servers}_{num_servers}.gif"
+
     gif_base64 = base64.b64encode(gif_buf.read()).decode('utf-8')
-    return f'<img src="data:image/gif;base64,{gif_base64}" />'
+    with open(filename, "wb") as f:
+        f.write(base64.b64decode(gif_base64))
+    return filename
 
 # Helper function for detailed visualizations
-def generate_visualizations(queue_system, simulation_time):
+def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting_times, average_waiting_time, simulation_time, all_service_times, num_servers, label):
     # Queue Length Over Time
     plt.figure(figsize=(8, 4))
-    time_steps = range(len(queue_system.queue_lengths))
-    plt.plot(time_steps, queue_system.queue_lengths, label="Queue Length", color="orange")
-    
-    # Adding vertical lines for key events, e.g., high queue length moments
-    max_queue_length = max(queue_system.queue_lengths)
-    max_queue_time = queue_system.queue_lengths.index(max_queue_length)
-    plt.axvline(x=max_queue_time, color='red', linestyle='--', label=f"Max Queue Length at {max_queue_time} mins")
-    
-    plt.title("Queue Length Over Time")
+    for queue_lengths in all_queue_lengths:
+        plt.plot(range(len(queue_lengths)), queue_lengths, alpha=0.5, color="lightblue")
+    plt.plot(range(len(average_queue_length)), average_queue_length, label="Average", color="red")
+    plt.title(f"Queue Length Over Time {label} m={num_servers}")
     plt.xlabel("Time (minutes)")
     plt.ylabel("Queue Length")
     plt.grid()
     plt.legend()
-    queue_length_plot = "queue_length_plot.png"
+    queue_length_plot = f"queue_length_plot#1_{num_servers}.png"
     plt.savefig(queue_length_plot)
     plt.close()
 
     # Waiting Times Distribution
     plt.figure(figsize=(8, 4))
-    sns.histplot(queue_system.waiting_times, bins=20, kde=True, color="purple")
-    
-    # Add mean and median lines to the waiting times distribution plot
-    mean_waiting_time = statistics.mean(queue_system.waiting_times)
-    median_waiting_time = statistics.median(queue_system.waiting_times)
-    plt.axvline(mean_waiting_time, color='blue', linestyle='--', label=f"Mean Waiting Time: {mean_waiting_time:.2f} mins")
-    plt.axvline(median_waiting_time, color='green', linestyle='--', label=f"Median Waiting Time: {median_waiting_time:.2f} mins")
-    
-    plt.title("Distribution of Waiting Times")
+    for waiting_times in all_waiting_times:
+        sns.histplot(waiting_times, bins=20, kde=True, alpha=0.5, color="lightblue")
+    sns.histplot(average_waiting_time, bins=20, kde=True, color="red", label="Average")
+    plt.title(f"Distribution of Waiting Times {label} m={num_servers}")
     plt.xlabel("Waiting Time (minutes)")
     plt.ylabel("Frequency")
-    plt.grid()
     plt.legend()
-    waiting_time_plot = "waiting_time_plot.png"
+    waiting_time_plot = f"waiting_time_plot#1_{num_servers}.png"
     plt.savefig(waiting_time_plot)
     plt.close()
-
+    
+    
     # Server Utilization
     plt.figure(figsize=(8, 4))
-    utilization = [sum(queue_system.service_times) / (simulation_time * 60 * queue_system.num_servers) * 100]
-    sns.barplot(x=["Server Utilization (%)"], y=utilization, palette="Blues_d")
+
+    utilizations = []
+    for service_time in all_service_times:
+        utilization = sum(service_time) / (simulation_time * 60 * int(num_servers)) * 100
+        utilizations.append(utilization)
+
+    sns.barplot(x=[f"{i+1}" for i in range(len(utilizations))], y=utilizations, alpha=0.6, color="lightblue")
+
+    average_utilization = sum(utilizations) / len(utilizations)
+    sns.barplot(x=["AVG"], y=[average_utilization], color="red", alpha=0.8)
+
+    utilization_percentage = utilization
+    plt.text(0, 0, f"{utilization_percentage:.2f}%", ha="center", va="bottom", fontsize=12)
     
-    # Adding text annotations to show the server utilization percentage
-    utilization_percentage = utilization[0]
-    plt.text(0, utilization_percentage + 2, f"{utilization_percentage:.2f}%", ha="center", va="bottom", fontsize=12)
-    
-    plt.title("Server Utilization")
+    plt.title(f"Server Utilization {label} m={num_servers}")
     plt.ylim(0, 100)
     plt.grid()
-    utilization_plot = "utilization_plot.png"
+    utilization_plot = f"utilization_plot#1_{num_servers}.png"
     plt.savefig(utilization_plot)
     plt.close()
 
+    # Server Utilization
+    # Add a bar plot with averages
     return queue_length_plot, waiting_time_plot, utilization_plot
 
 # Main app function
-def queue_simulation(simulation_time, num_servers, service_rate, queue_discipline, logs: gr.State):
+def queue_simulation(num_runs, simulation_time, num_servers, service_rate, queue_discipline, logs):
     logs.append("Starting simulation...")
-    
+
     stats_summary = ""
     customer_data_table = ""
     queue_length_plot = ""
     waiting_time_plot = ""
     utilization_plot = ""
     queue_animation = ""
-    
-    # For "Both" discipline, run both FIFO and SJF simulations
+
+    all_queue_lengths = []
+    all_waiting_times = []
+    all_utilizations = []
+    all_queue_lengths_fifo = []
+    all_waiting_times_fifo = []
+    all_utilizations_fifo = []
+    all_queue_lengths_sjf = []
+    all_waiting_times_sjf = []
+    all_utilizations_sjf = []
+
+    all_waiting_times_fifo_list = []
+    all_queue_lengths_fifo_list = []
+    all_system_time_fifo_list = []
+    all_waiting_times_sjf_list = []
+    all_queue_lengths_sjf_list = []
+    all_system_time_sjf_list = []
+    all_waiting_times_list = []
+    all_queue_lengths_list = []
+    all_system_time_list = []
+    all_service_time_fifo_list = []
+    all_service_time_sjf_list = []
+    all_service_time_list = []
+
+    # Run simulations for both FIFO and SJF if "Both" discipline is selected
     if queue_discipline == "Both":
-        logs.append("Running FIFO simulation...")
-        stats_fifo, customer_df_fifo, data_fifo, log_fifo = sm.run_simulation(
-            simulation_time=simulation_time,
-            num_servers=num_servers,
-            service_rate=service_rate,
-            queue_discipline="FIFO"
-        )
-        logs = logs + log_fifo
+        logs.append("Running FIFO simulations...")
+
+        for run in range(num_runs):
+            stats_fifo, customer_df_fifo, data_fifo, log_fifo = sm.run_simulation(
+                simulation_time=simulation_time,
+                num_servers=num_servers,
+                service_rate=service_rate,
+                queue_discipline="FIFO"
+            )
+            logs.append(f"Run {run + 1} for FIFO completed.")
+            all_queue_lengths_fifo.append(data_fifo['queue_lengths'])
+            all_waiting_times_fifo.append(data_fifo['waiting_times'])
+            all_utilizations_fifo.append(stats_fifo['server_utilization'])
+            
+            all_waiting_times_fifo_list.append(stats_fifo['average_waiting_time'])
+            all_queue_lengths_fifo_list.append(stats_fifo['average_queue_length'])
+            all_system_time_fifo_list.append(stats_fifo['average_system_time'])
+            all_service_time_fifo_list.append(data_fifo["service_times"])
+
         logs.append("FIFO simulation completed.")
         
-        logs.append("Running SJF simulation...")
-        stats_sjf, customer_df_sjf, data_sjf, log_sjf = sm.run_simulation(
-            simulation_time=simulation_time,
-            num_servers=num_servers,
-            service_rate=service_rate,
-            queue_discipline="SJF"
-        )
-        logs = logs + log_sjf
+        logs.append("Running SJF simulations...")
+
+        for run in range(num_runs):
+            stats_sjf, customer_df_sjf, data_sjf, log_sjf = sm.run_simulation(
+                simulation_time=simulation_time,
+                num_servers=num_servers,
+                service_rate=service_rate,
+                queue_discipline="SJF"
+            )
+            logs.append(f"Run {run + 1} for SJF completed.")
+            all_queue_lengths_sjf.append(data_sjf['queue_lengths'])
+            all_waiting_times_sjf.append(data_sjf['waiting_times'])
+            all_utilizations_sjf.append(stats_sjf['server_utilization'])
+            
+            all_waiting_times_sjf_list.append(stats_sjf['average_waiting_time'])
+            all_queue_lengths_sjf_list.append(stats_sjf['average_queue_length'])
+            all_system_time_sjf_list.append(stats_sjf['average_system_time'])
+            all_service_time_sjf_list.append(data_sjf["service_times"])
+
         logs.append("SJF simulation completed.")
+
+        # Calculate averages for FIFO and SJF (flatten the lists and then calculate averages)
+        average_queue_length_fifo = [sum(x) / len(x) for x in zip(*all_queue_lengths_fifo)]
+        average_waiting_time_fifo = [sum(x) / len(x) for x in zip(*all_waiting_times_fifo)]
         
+        average_queue_length_sjf = [sum(x) / len(x) for x in zip(*all_queue_lengths_sjf)]
+        average_waiting_time_sjf = [sum(x) / len(x) for x in zip(*all_waiting_times_sjf)]
+
         # Generate visualizations for FIFO
-        queue_system_fifo = QueueSystem(simpy.Environment(), num_servers, service_rate, "FIFO")
-        queue_system_fifo.queue_lengths = data_fifo['queue_lengths']
-        queue_system_fifo.waiting_times = data_fifo['waiting_times']
-        queue_system_fifo.service_times = data_fifo['service_times']
-        
-        queue_length_plot_fifo, waiting_time_plot_fifo, utilization_plot_fifo = generate_visualizations(queue_system_fifo, simulation_time)
+        queue_length_plot_fifo, waiting_time_plot_fifo, utilization_plot_fifo = generate_visualizations(
+            all_queue_lengths_fifo, average_queue_length_fifo, all_waiting_times_fifo, average_waiting_time_fifo, simulation_time, all_service_time_fifo_list, num_servers, "FIFO"
+        )
         
         # Generate visualizations for SJF
-        queue_system_sjf = QueueSystem(simpy.Environment(), num_servers, service_rate, "SJF")
-        queue_system_sjf.queue_lengths = data_sjf['queue_lengths']
-        queue_system_sjf.waiting_times = data_sjf['waiting_times']
-        queue_system_sjf.service_times = data_sjf['service_times']
-        
-        queue_length_plot_sjf, waiting_time_plot_sjf, utilization_plot_sjf = generate_visualizations(queue_system_sjf, simulation_time)
-        
+        queue_length_plot_sjf, waiting_time_plot_sjf, utilization_plot_sjf = generate_visualizations(
+            all_queue_lengths_sjf, average_queue_length_sjf, all_waiting_times_sjf, average_waiting_time_sjf, simulation_time, all_service_time_sjf_list, num_servers, "SJF"
+        )
+
         # Generate animation for both FIFO and SJF
-        queue_animation_fifo = create_queue_animation(queue_system_fifo.queue_lengths, simulation_time)
-        queue_animation_sjf = create_queue_animation(queue_system_sjf.queue_lengths, simulation_time)
-        
+        queue_animation_fifo = create_queue_animation(all_queue_lengths_fifo, average_queue_length_fifo, num_servers, "FIFO")
+        queue_animation_sjf = create_queue_animation(all_queue_lengths_sjf, average_queue_length_sjf, num_servers, "SJF")
+
         # Create comparison plot for Queue Length
         plt.figure(figsize=(8, 4))
-        plt.plot(range(len(queue_system_fifo.queue_lengths)), queue_system_fifo.queue_lengths, label="FIFO", color="orange")
-        plt.plot(range(len(queue_system_sjf.queue_lengths)), queue_system_sjf.queue_lengths, label="SJF", color="blue")
-        plt.title("Queue Length Comparison (FIFO vs SJF)")
+        plt.plot(range(len(average_queue_length_fifo)), average_queue_length_fifo, label="FIFO Average", color="orange")
+        plt.plot(range(len(average_queue_length_sjf)), average_queue_length_sjf, label="SJF Average", color="blue")
+        plt.title(f"Queue Length Comparison (FIFO vs SJF) m={num_servers}")
         plt.xlabel("Time (minutes)")
         plt.ylabel("Queue Length")
         plt.legend()
-        comparison_plot = "comparison_plot.png"
+        comparison_plot = f"comparison_plot_{num_servers}.png"
         plt.savefig(comparison_plot)
         plt.close()
-        
+
         stats_summary = (
-            f"### Simulation Summary\n"
-            f"- **Total Customers Served (FIFO)**: {stats_fifo['total_customers']}\n"
-            f"- **Average Waiting Time (FIFO)**: {stats_fifo['average_waiting_time']:.2f} minutes\n"
-            f"- **Average Queue Length (FIFO)**: {stats_fifo['average_queue_length']:.2f}\n"
-            f"- **Average Time in System (FIFO)**: {stats_fifo['average_system_time']:.2f} minutes\n"
-            f"- **Server Utilization (FIFO)**: {stats_fifo['server_utilization']:.2f}%\n"
+            f"### m={num_servers} (Averaged over {num_runs} runs)\n"
+            f"- **Average Server Utilization (FIFO)**: {statistics.mean(all_utilizations_fifo):.2f}%\n"
+            f"- **Average Server Utilization (SJF)**: {statistics.mean(all_utilizations_sjf):.2f}%\n"
             f"\n"
-            f"- **Total Customers Served (SJF)**: {stats_sjf['total_customers']}\n"
-            f"- **Average Waiting Time (SJF)**: {stats_sjf['average_waiting_time']:.2f} minutes\n"
-            f"- **Average Queue Length (SJF)**: {stats_sjf['average_queue_length']:.2f}\n"
-            f"- **Average Time in System (SJF)**: {stats_sjf['average_system_time']:.2f} minutes\n"
-            f"- **Server Utilization (SJF)**: {stats_sjf['server_utilization']:.2f}%\n"
+            f"- **Average Waiting Time (FIFO)**: {statistics.mean(all_waiting_times_fifo_list):.2f} minutes\n"
+            f"- **Average Waiting Time (SJF)**: {statistics.mean(all_waiting_times_sjf_list):.2f} minutes\n"
+            f"- **Average Queue Length (FIFO)**: {statistics.mean(all_queue_lengths_fifo_list):.2f}\n"
+            f"- **Average Queue Length (SJF)**: {statistics.mean(all_queue_lengths_sjf_list):.2f}\n"
+            f"- **Average Time in System (FIFO)**: {statistics.mean(all_system_time_fifo_list):.2f} minutes\n"
+            f"- **Average Time in System (SJF)**: {statistics.mean(all_system_time_sjf_list):.2f} minutes\n"
         )
 
         # Create customer data table
         customer_df = pd.concat([customer_df_fifo, customer_df_sjf], keys=["FIFO", "SJF"]).reset_index(level=0).rename(columns={'level_0': 'Discipline'})
-        customer_data_table = customer_df.head(20).to_html(index=False)
-        
+        customer_data_table = customer_df.round(2).to_html(index=False)
+
+        # Return all outputs
+        return stats_summary, customer_data_table, comparison_plot, waiting_time_plot_fifo, waiting_time_plot_sjf, utilization_plot_fifo, utilization_plot_sjf, queue_animation_fifo, queue_animation_sjf, "\n".join(logs)
+    
     else:
-        # Run simulation for selected discipline
-        stats, customer_df, data, log = sm.run_simulation(
-            simulation_time=simulation_time,
-            num_servers=num_servers,
-            service_rate=service_rate,
-            queue_discipline=queue_discipline
+        # Run for the selected discipline
+        for run in range(num_runs):
+            stats, customer_df, data, log = sm.run_simulation(
+                simulation_time=simulation_time,
+                num_servers=num_servers,
+                service_rate=service_rate,
+                queue_discipline=queue_discipline
+            )
+            logs.append(f"Run {run + 1} for {queue_discipline} completed.")
+            all_queue_lengths.append(data['queue_lengths'])
+            all_waiting_times.append(data['waiting_times'])
+            all_utilizations.append(stats['server_utilization'])
+            
+            all_waiting_times_list.append(stats['average_waiting_time'])
+            all_queue_lengths_list.append(stats['average_queue_length'])
+            all_system_time_list.append(stats['average_system_time'])
+            all_service_time_list.append(data["service_times"])
+
+
+        logs.append(f"{queue_discipline} simulation completed.")
+
+        # Calculate averages for single run
+        average_queue_length = [sum(x) / len(x) for x in zip(*all_queue_lengths)]
+        average_waiting_time = [sum(x) / len(x) for x in zip(*all_waiting_times)]
+
+        # Generate visualizations
+        queue_length_plot, waiting_time_plot, utilization_plot = generate_visualizations(
+            all_queue_lengths, average_queue_length, all_waiting_times, average_waiting_time, simulation_time, all_service_time_list, num_servers, queue_discipline
         )
         
-        logs = logs + log
-        
-        logs.append(f"{queue_discipline} simulation completed.")
-        
-        # Generate visualizations
-        queue_system = QueueSystem(simpy.Environment(), num_servers, service_rate, queue_discipline)
-        queue_system.queue_lengths = data['queue_lengths']
-        queue_system.waiting_times = data['waiting_times']
-        queue_system.service_times = data['service_times']
+        customer_data_table = customer_df.round(2).to_html(index=False)
 
-        queue_length_plot, waiting_time_plot, utilization_plot = generate_visualizations(queue_system, simulation_time)
-        
         # Generate animation
-        queue_animation = create_queue_animation(queue_system.queue_lengths, simulation_time)
+        queue_animation = create_queue_animation(all_queue_lengths, average_queue_length, num_servers, queue_discipline)
 
         stats_summary = (
-            f"### Simulation Summary\n"
-            f"- **Total Customers Served**: {stats['total_customers']}\n"
-            f"- **Average Waiting Time**: {stats['average_waiting_time']:.2f} minutes\n"
-            f"- **Average Queue Length**: {stats['average_queue_length']:.2f}\n"
-            f"- **Average Time in System**: {stats['average_system_time']:.2f} minutes\n"
-            f"- **Server Utilization**: {stats['server_utilization']:.2f}%\n"
+            f"### m={num_servers} (Averaged over {num_runs} runs)\n"
+            f"- **Average Server Utilization**: {statistics.mean(all_utilizations):.2f}%\n"
+            f"- **Average Waiting Time**: {statistics.mean(all_waiting_times_list):.2f} minutes\n"
+            f"- **Average Queue Length**: {statistics.mean(all_queue_lengths_list):.2f}\n"
+            f"- **Average Time in System**: {statistics.mean(all_system_time_list):.2f}\n"
         )
 
-    # Return appropriate outputs based on the discipline choice
-    if queue_discipline == "Both":
-        return stats_summary, customer_data_table, comparison_plot, waiting_time_plot_fifo, utilization_plot_fifo, queue_animation_fifo, "\n".join(logs)
-    else:
-        return stats_summary, customer_data_table, queue_length_plot, waiting_time_plot, utilization_plot, queue_animation, "\n".join(logs)
+        # single discipline results
+        return stats_summary, customer_data_table, queue_length_plot, waiting_time_plot, waiting_time_plot, utilization_plot, utilization_plot, queue_animation, queue_animation, "\n".join(logs)
 
 def list_files(queue_discipline, num_servers):
     if queue_discipline == "FIFO":
@@ -257,6 +319,8 @@ with gr.Blocks() as queue_sim_app:
     gr.Markdown("# 🚀 **Queue Simulation System for Performance Optimization**")
     gr.Markdown(
         """
+        ### Please run the simulation and scroll down for visualizations
+
         This interactive tool enables you to:
         - **Simulate Queueing Dynamics**: Analyze real-time behavior of customer queues under different configurations.
         - **Compare Queue Disciplines**: Understand and evaluate FIFO, SJF, or both to identify the best strategy for optimizing performance.
@@ -272,14 +336,23 @@ with gr.Blocks() as queue_sim_app:
     with gr.Row():
         with gr.Column():
             gr.Markdown("### Simulation Parameters")
+            num_runs = gr.Slider(
+                label="Number of Runs (N)",
+                minimum=1, maximum=70, step=1, value=1, interactive=True
+            )
             simulation_time = gr.Slider(
                 label="Simulation Time (hours)",
                 minimum=1, maximum=24, step=1, value=12, interactive=True
             )
-            num_servers = gr.Slider(
-                label="Number of Servers",
-                minimum=1, maximum=10, step=1, value=3, interactive=True
-            )
+            with gr.Row():
+                num_servers_min = gr.Slider(
+                    label="Minimum Number of Servers (m_min)",
+                    minimum=1, maximum=12, step=1, value=2, interactive=True
+                )
+                num_servers_max = gr.Slider(
+                    label="Maximum Number of Servers (m_min)",
+                    minimum=1, maximum=12, step=1, value=10, interactive=True
+                )
             service_rate = gr.Slider(
                 label="Service Rate (Mean Service Time)",
                 minimum=5, maximum=50, step=5, value=10, interactive=True
@@ -290,7 +363,10 @@ with gr.Blocks() as queue_sim_app:
                 value="FIFO",
                 interactive=True
             )
-            simulate_button = gr.Button("🚀 Run Single Simulation")
+            simulate_button = gr.Button("🚀 Run Simulation")
+            verbose_logs_output = gr.Textbox(
+                label="Logs",
+                lines=18, interactive=False, elem_id="logs_box")
             gr.Markdown("### Access Saved Results")
             with gr.Row():
                 outputfile_discipline = gr.Dropdown(choices=queue_options, label="Queue Discipline (EXCEL)", value="FIFO")
@@ -300,23 +376,35 @@ with gr.Blocks() as queue_sim_app:
                 outputfile_open_button = gr.Button("📂 Open Results")
             outputfile_area = gr.Dataframe()
         with gr.Column():
-            gr.Markdown("### Simulation Summary")
-            stats_output = gr.Markdown()
-            customer_data_output = gr.HTML()
+            gr.Markdown("### Simulation Summary #1")
+            stats_output1 = gr.Markdown()
             file_links_output = gr.HTML(
                 label="Simulation Results Files")
-            verbose_logs_output = gr.Textbox(
-                label="Detailed Logs",
-                lines=12, interactive=False, elem_id="logs_box")
+        with gr.Column():
+            gr.Markdown("### Simulation Summary #2")
+            stats_output2 = gr.Markdown()
+    with gr.Row():
         with gr.Column():
             gr.Markdown("### Visualizations")
-            queue_length_plot_output = gr.Image(
-                label="Queue Length Over Time")
-            waiting_time_plot_output = gr.Image(
-                label="Waiting Times Distribution")
-            utilization_plot_output = gr.Image(
-                label="Server Utilization")
-            animation_output = gr.HTML()
+            with gr.Row():
+                with gr.Column():
+                    queue_length_plot_output = gr.Gallery(
+                        label="Queue Length Over Time")
+                    waiting_time_plot_output = gr.Gallery(
+                        label="Waiting Times Distribution #1")
+                    waiting_time_plot_output2 = gr.Gallery(
+                        label="Waiting Times Distribution #2")
+                with gr.Column():
+                    utilization_plot_output = gr.Gallery(
+                        label="Server Utilization #1")
+                    utilization_plot_output2 = gr.Gallery(
+                        label="Server Utilization #2")
+                    animation_output = gr.Gallery(
+                        label="Queue Length #1")
+                    animation_output2 = gr.Gallery(
+                        label="Queue Length #2")
+    with gr.Row():
+        customer_data_output = gr.HTML()
 
     logs_state = gr.State([])
     
@@ -341,16 +429,55 @@ with gr.Blocks() as queue_sim_app:
     
     outputfile_view_button.click(open_file, inputs=[outputfile_discipline, outputfile_numserver], outputs=outputfile_area)
 
+    verbose_logs = []
+    verbose_logs_str = ""
+    stats = ""
+
+    def simulate(queue_discipline, num_servers_min, num_servers_max, num_runs, simulation_time, service_rate):
+        global verbose_logs, verbose_logs_str, stats
+        stats = ""
+        gallery_data_queue_length = []
+        gallery_data_waiting_times = []
+        gallery_data_waiting_times2 = []
+        gallery_data_utilization = []
+        gallery_data_utilization2 = []
+        gallery_animation_output = []
+        gallery_animation_output2 = []
+        
+        for num_servers in range(num_servers_min, num_servers_max + 1):
+            stats_n, customer_data, queue_length_plot, waiting_time_plot, waiting_time_plot2, utilization_plot, utilization_plot2, animation, animation2, verbose_logs_n = queue_simulation( num_runs, simulation_time, num_servers, service_rate, queue_discipline, [] )
+
+            verbose_logs = [verbose_logs_str] + [verbose_logs_n]
+            verbose_logs_str = '\n'.join(verbose_logs)
+            stats = stats + stats_n
+            
+            # Append to galleries
+            gallery_data_queue_length.append(queue_length_plot)
+            gallery_data_waiting_times.append(waiting_time_plot)
+            gallery_data_utilization.append(utilization_plot)
+            gallery_data_waiting_times2.append(waiting_time_plot2)
+            gallery_data_utilization2.append(utilization_plot2)
+            gallery_animation_output.append(animation)
+            gallery_animation_output2.append(animation2)
+        
+        stat_part1, stat_part2 = "\n".join(stats.splitlines()[:len(stats.splitlines())//2]), "\n".join(stats.splitlines()[len(stats.splitlines())//2:])
+
+        return stat_part1, stat_part2, customer_data, gallery_data_queue_length, gallery_data_waiting_times, gallery_data_waiting_times2, gallery_data_utilization, gallery_data_utilization2, gallery_animation_output, gallery_animation_output2, verbose_logs_str
+
     simulate_button.click(
-        queue_simulation,
-        inputs=[simulation_time, num_servers, service_rate, queue_discipline, logs_state],
+        simulate,
+        inputs=[queue_discipline, num_servers_min, num_servers_max, num_runs, simulation_time, service_rate],
         outputs=[
-            stats_output,
+            stats_output1,
+            stats_output2,
             customer_data_output,
             queue_length_plot_output,
             waiting_time_plot_output,
+            waiting_time_plot_output2,
             utilization_plot_output,
+            utilization_plot_output2,
             animation_output,
+            animation_output2,
             verbose_logs_output
         ]
     )
