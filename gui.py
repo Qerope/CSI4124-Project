@@ -15,6 +15,9 @@ import base64
 import openpyxl
 from PIL import Image
 
+data_dir = "data"
+os.makedirs(data_dir, exist_ok=True)
+
 def create_queue_animation(all_queue_lengths, average_queue_length, num_servers, label):
     fig, ax = plt.subplots(figsize=(8, 4))
     max_length = max(max(len(run) for run in all_queue_lengths), len(average_queue_length))
@@ -47,7 +50,7 @@ def create_queue_animation(all_queue_lengths, average_queue_length, num_servers,
 
     gif_buf.seek(0)
 
-    filename = f"animated_queue_lengths_{label} m={num_servers}_{num_servers}.gif"
+    filename = os.path.join(data_dir, f"/animated_queue_lengths_{label} m={num_servers}_{num_servers}.gif")
 
     gif_base64 = base64.b64encode(gif_buf.read()).decode('utf-8')
     with open(filename, "wb") as f:
@@ -66,7 +69,7 @@ def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting
     plt.ylabel("Queue Length")
     plt.grid()
     plt.legend()
-    queue_length_plot = f"queue_length_plot#1_{num_servers}.png"
+    queue_length_plot = os.path.join(data_dir, f"queue_length_plot#1_{num_servers}.png")
     plt.savefig(queue_length_plot)
     plt.close()
 
@@ -79,7 +82,7 @@ def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting
     plt.xlabel("Waiting Time (minutes)")
     plt.ylabel("Frequency")
     plt.legend()
-    waiting_time_plot = f"waiting_time_plot#1_{num_servers}.png"
+    waiting_time_plot = os.path.join(data_dir, f"waiting_time_plot#1_{num_servers}.png")
     plt.savefig(waiting_time_plot)
     plt.close()
     
@@ -103,7 +106,7 @@ def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting
     plt.title(f"Server Utilization {label} m={num_servers}")
     plt.ylim(0, 100)
     plt.grid()
-    utilization_plot = f"utilization_plot#1_{num_servers}.png"
+    utilization_plot = os.path.join(data_dir, f"utilization_plot#1_{num_servers}.png")
     plt.savefig(utilization_plot)
     plt.close()
 
@@ -292,10 +295,10 @@ def queue_simulation(num_runs, simulation_time, num_servers, service_rate, queue
 def list_files(queue_discipline, num_servers):
     if queue_discipline == "FIFO":
         directory = f"output/fifo"
-        file_name = f"simulation_results_fifo_{num_servers}server.xlsx"
+        file_name = f"simulation_results_{num_servers}server.xlsx"
     elif queue_discipline == "SJF":
         directory = f"output/sjf"
-        file_name = f"simulation_results_sjf_{num_servers}server.xlsx"
+        file_name = f"simulation_results_{num_servers}server.xlsx"
     else:
         return None
     
@@ -367,10 +370,13 @@ with gr.Blocks() as queue_sim_app:
             verbose_logs_output = gr.Textbox(
                 label="Logs",
                 lines=18, interactive=False, elem_id="logs_box")
-            gr.Markdown("### Access Saved Results")
+            gr.Markdown("### Access Saved Results (EXCEL DATA) -> 30 Runs FIFO vs SJF m=[2,10]")
+            run_defined_simulations = gr.Button("Run Predefined Simulations")
+            file_links_output = gr.HTML(
+                label="Simulation Results Files")
             with gr.Row():
-                outputfile_discipline = gr.Dropdown(choices=queue_options, label="Queue Discipline (EXCEL)", value="FIFO")
-                outputfile_numserver = gr.Dropdown(choices=server_options, label="Number of Servers (EXCEL)", value=2)
+                outputfile_discipline = gr.Dropdown(choices=queue_options, label="Queue Discipline", value="FIFO")
+                outputfile_numserver = gr.Dropdown(choices=server_options, label="Number of Servers", value=2)
             with gr.Row():
                 outputfile_view_button = gr.Button("🗂️ View Results")
                 outputfile_open_button = gr.Button("📂 Open Results")
@@ -378,8 +384,6 @@ with gr.Blocks() as queue_sim_app:
         with gr.Column():
             gr.Markdown("### Simulation Summary #1")
             stats_output1 = gr.Markdown()
-            file_links_output = gr.HTML(
-                label="Simulation Results Files")
         with gr.Column():
             gr.Markdown("### Simulation Summary #2")
             stats_output2 = gr.Markdown()
@@ -426,8 +430,15 @@ with gr.Blocks() as queue_sim_app:
         inputs=[outputfile_discipline, outputfile_numserver],
         outputs=file_links_output
     )
+
+
+    def on_button_click():
+        result = sm.run_simulations([])  # Run the simulations
+        return result
     
     outputfile_view_button.click(open_file, inputs=[outputfile_discipline, outputfile_numserver], outputs=outputfile_area)
+
+    run_defined_simulations.click(on_button_click, outputs=file_links_output)
 
     verbose_logs = []
     verbose_logs_str = ""
@@ -482,4 +493,4 @@ with gr.Blocks() as queue_sim_app:
         ]
     )
 
-queue_sim_app.launch()
+queue_sim_app.launch(share=True)

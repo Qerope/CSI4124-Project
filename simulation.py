@@ -171,46 +171,75 @@ output_dir_sjf = os.path.join("output", "sjf")
 os.makedirs(output_dir_fifo, exist_ok=True)
 os.makedirs(output_dir_sjf, exist_ok=True)
 
-# 30 runs with FIFO queue discipline
-for num_server in range(2,11):
-    all_stats = [] # Overall stats for each run
-    writer = pd.ExcelWriter(f"output\\fifo\\simulation_results_fifo_{num_server}server.xlsx", engine="xlsxwriter")
+def run_simulations(logs):
+    # 30 runs with FIFO queue discipline
+    for num_server in range(2, 11):
+        all_stats = []  # Overall stats for each run
+        writer = pd.ExcelWriter(os.path.join(output_dir_fifo, f"simulation_results_{num_server}server.xlsx"), engine="xlsxwriter")
+        log_message_start = f"Starting simulation with {num_server} servers and FIFO discipline."
+        print(log_message_start) 
+        logs.append(log_message_start) 
 
-    for run in range(30):
-        # Set random seed
-        random.seed()
+        for run in range(30):
+            log_message_start = f"Run {run + 1}: Starting simulation with {num_server} servers and FIFO discipline."
+            print(log_message_start) 
+            logs.append(log_message_start) 
 
-        # Run the simulation
-        stats, customer_data = run_simulation(simulation_time=24, num_servers=num_server, service_rate=1.2, queue_discipline="FIFO")
+            # Set random seed
+            random.seed()
 
-        # Append overall statistics for this run
-        all_stats.append(stats)
-    
-        # Save customer data to a new sheet in the workbook
-        sheet_name = f"Run_{run+1}"
-        customer_data.to_excel(writer, sheet_name=sheet_name, index=False)
+            # Run the simulation
+            stats, customer_data, data, logs = run_simulation(
+                simulation_time=24, num_servers=num_server, service_rate=1.2, queue_discipline="FIFO"
+            )
 
-    # Save the workbook
-    writer.close()
+            # Append overall statistics for this run
+            all_stats.append(stats)
 
-# 30 runs with SJF queue discipline
-for num_server in range(2,11):
-    all_stats = [] # Overall stats for each run
-    writer = pd.ExcelWriter(f"output\\sjf\\simulation_results_sjf_{num_server}server.xlsx", engine="xlsxwriter")
+            log_message_end = f"Run {run + 1}: Simulation completed with {num_server} servers and FIFO discipline."
+            print(log_message_end)
+            logs.append(log_message_end) 
 
-    for run in range(30):
-        # Set random seed
-        random.seed()
+            # Save customer data to a new sheet in the workbook
+            sheet_name = f"Run_{run+1}"
+            customer_data.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        # Run the simulation
-        stats, customer_data = run_simulation(simulation_time=24, num_servers=num_server, service_rate=1.2, queue_discipline="SJF")
+        # Save the workbook
+        writer.close()
 
-        # Append overall statistics for this run
-        all_stats.append(stats)
-    
-        # Save customer data to a new sheet in the workbook
-        sheet_name = f"Run_{run+1}"
-        customer_data.to_excel(writer, sheet_name=sheet_name, index=False)
+    # 30 runs with SJF queue discipline
+    for num_server in range(2, 11):
+        all_stats = []  # Overall stats for each run
+        writer = pd.ExcelWriter(os.path.join(output_dir_sjf, f"simulation_results_{num_server}server.xlsx"), engine="xlsxwriter")
+        log_message_start = f"Starting simulation with {num_server} servers and SJF discipline."
+        print(log_message_start) 
+        logs.append(log_message_start) 
 
-    # Save the workbook
-    writer.close()
+        for run in range(30):
+            log_message_start = f"Run {run + 1}: Starting simulation with {num_server} servers and SJF discipline."
+            print(log_message_start) 
+            logs.append(log_message_start)  
+
+            # Set random seed
+            random.seed()
+
+            # Run the simulation
+            stats, customer_data, data, logs = run_simulation(
+                simulation_time=24, num_servers=num_server, service_rate=1.2, queue_discipline="SJF"
+            )
+
+            # Append overall statistics for this run
+            all_stats.append(stats)
+
+            # Log and print the end of the run
+            log_message_end = f"Run {run + 1}: Simulation completed with {num_server} servers and SJF discipline."
+            print(log_message_end) 
+            logs.append(log_message_end)
+
+            # Save customer data to a new sheet in the workbook
+            sheet_name = f"Run_{run+1}"
+            customer_data.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        # Save the workbook
+        writer.close()
+    return f'<a href="file://output" download>Open Simulation Directory \'output\' or View The Results Below:</a>'
