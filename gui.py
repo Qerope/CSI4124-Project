@@ -50,7 +50,7 @@ def create_queue_animation(all_queue_lengths, average_queue_length, num_servers,
 
     gif_buf.seek(0)
 
-    filename = os.path.join(data_dir, f"/animated_queue_lengths_{label} m={num_servers}_{num_servers}.gif")
+    filename = os.path.join(data_dir, f"animated_queue_lengths_{label}_m={num_servers}_{num_servers}.gif")
 
     gif_base64 = base64.b64encode(gif_buf.read()).decode('utf-8')
     with open(filename, "wb") as f:
@@ -69,7 +69,7 @@ def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting
     plt.ylabel("Queue Length")
     plt.grid()
     plt.legend()
-    queue_length_plot = os.path.join(data_dir, f"queue_length_plot#1_{num_servers}.png")
+    queue_length_plot = os.path.join(data_dir, f"queue_length_plot_{label}_m{num_servers}.png")
     plt.savefig(queue_length_plot)
     plt.close()
 
@@ -82,7 +82,7 @@ def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting
     plt.xlabel("Waiting Time (minutes)")
     plt.ylabel("Frequency")
     plt.legend()
-    waiting_time_plot = os.path.join(data_dir, f"waiting_time_plot#1_{num_servers}.png")
+    waiting_time_plot = os.path.join(data_dir, f"waiting_time_plot_{label}_m{num_servers}.png")
     plt.savefig(waiting_time_plot)
     plt.close()
     
@@ -106,7 +106,7 @@ def generate_visualizations(all_queue_lengths, average_queue_length, all_waiting
     plt.title(f"Server Utilization {label} m={num_servers}")
     plt.ylim(0, 100)
     plt.grid()
-    utilization_plot = os.path.join(data_dir, f"utilization_plot#1_{num_servers}.png")
+    utilization_plot = os.path.join(data_dir, f"utilization_plot_{label}_m{num_servers}.png")
     plt.savefig(utilization_plot)
     plt.close()
 
@@ -221,7 +221,7 @@ def queue_simulation(num_runs, simulation_time, num_servers, service_rate, queue
         plt.xlabel("Time (minutes)")
         plt.ylabel("Queue Length")
         plt.legend()
-        comparison_plot = f"comparison_plot_{num_servers}.png"
+        comparison_plot = os.path.join(data_dir, f"comparison_plot_{num_servers}.png")
         plt.savefig(comparison_plot)
         plt.close()
 
@@ -370,6 +370,14 @@ with gr.Blocks() as queue_sim_app:
             verbose_logs_output = gr.Textbox(
                 label="Logs",
                 lines=18, interactive=False, elem_id="logs_box")
+        with gr.Column():
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Simulation Summary #1")
+                    stats_output1 = gr.Markdown()
+                with gr.Column():
+                    gr.Markdown("### Simulation Summary #2")
+                    stats_output2 = gr.Markdown()
             gr.Markdown("### Access Saved Results (EXCEL DATA) -> 30 Runs FIFO vs SJF m=[2,10]")
             run_defined_simulations = gr.Button("Run Predefined Simulations")
             file_links_output = gr.HTML(
@@ -381,12 +389,6 @@ with gr.Blocks() as queue_sim_app:
                 outputfile_view_button = gr.Button("🗂️ View Results")
                 outputfile_open_button = gr.Button("📂 Open Results")
             outputfile_area = gr.Dataframe()
-        with gr.Column():
-            gr.Markdown("### Simulation Summary #1")
-            stats_output1 = gr.Markdown()
-        with gr.Column():
-            gr.Markdown("### Simulation Summary #2")
-            stats_output2 = gr.Markdown()
     with gr.Row():
         with gr.Column():
             gr.Markdown("### Visualizations")
@@ -493,4 +495,4 @@ with gr.Blocks() as queue_sim_app:
         ]
     )
 
-queue_sim_app.launch(share=True)
+queue_sim_app.launch()
